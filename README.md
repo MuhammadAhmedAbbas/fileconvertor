@@ -12,6 +12,7 @@ PDF → Image
 Fast and lightweight processing
 User-friendly interface
 Secure file handling (files are not stored permanently)
+
 🛠️ Technologies Used
 Backend: Python Flask
 Frontend: HTML, CSS, JavaScript
