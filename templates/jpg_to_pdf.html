@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}JPG to PDF{% endblock %}
+{% block meta_desc %}Convert JPG or PNG images into a PDF document online for free.{% endblock %}
+
+{% block content %}
+<div class="tool-page">
+  <a href="/" class="btn-back">← Back to all tools</a>
+  <div class="tool-header">
+    <div class="tool-icon-lg">📷</div>
+    <div>
+      <h1>JPG to PDF</h1>
+      <p>Turn one or more JPG/PNG images into a single PDF document.</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <form class="tool-form" data-action="/api/jpg-to-pdf" id="tool-form">
+      <div class="drop-zone">
+        <input type="file" name="files" accept=".jpg,.jpeg,.png" multiple required/>
+        <div class="dz-icon">📄</div>
+        <h3>Drop images here</h3>
+        <p>or click to browse — JPG / PNG accepted</p>
+        <div class="file-list"></div>
+      </div>
+      <br/>
+      <button class="btn btn-primary" type="submit" data-label="Convert to PDF">Convert to PDF</button>
+    </form>
+
+    <div class="spinner-wrap" id="spinner">
+      <div class="spinner"></div>
+      <p>Building your PDF…</p>
+    </div>
+
+    <div id="error-msg" class="alert alert-error"></div>
+
+    <div class="result-card" id="result">
+      <div class="result-icon">✅</div>
+      <h3>PDF created!</h3>
+      <p>Your images have been combined into a PDF document.</p>
+      <p id="result-path" style="font-size:.82rem;color:var(--text-muted);font-family:monospace;word-break:break-all;"></p>
+      <a class="btn btn-download" id="dl-btn" href="#">⬇ Download PDF</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

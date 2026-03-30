@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Add Watermark to PDF{% endblock %}
+{% block meta_desc %}Add a custom text watermark to every page of your PDF online for free.{% endblock %}
+
+{% block content %}
+<div class="tool-page">
+  <a href="/" class="btn-back">← Back to all tools</a>
+  <div class="tool-header">
+    <div class="tool-icon-lg">💧</div>
+    <div>
+      <h1>Add Watermark</h1>
+      <p>Stamp a diagonal text watermark on every PDF page.</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <form class="tool-form" data-action="/api/watermark" id="tool-form">
+      <div class="drop-zone">
+        <input type="file" name="file" accept=".pdf" required/>
+        <div class="dz-icon">📄</div>
+        <h3>Drop a PDF here</h3>
+        <p>or click to browse</p>
+        <div class="file-list"></div>
+      </div>
+      <br/>
+      <div class="form-group">
+        <label>Watermark Text</label>
+        <input type="text" name="text" placeholder="e.g. CONFIDENTIAL" value="CONFIDENTIAL"/>
+      </div>
+      <div class="form-group">
+        <label>Opacity (0.1 = faint, 0.8 = strong)</label>
+        <input type="number" name="opacity" min="0.1" max="0.9" step="0.05" value="0.3"/>
+      </div>
+      <button class="btn btn-primary" type="submit" data-label="Add Watermark">Add Watermark</button>
+    </form>
+
+    <div class="spinner-wrap" id="spinner">
+      <div class="spinner"></div>
+      <p>Adding watermark…</p>
+    </div>
+
+    <div id="error-msg" class="alert alert-error"></div>
+
+    <div class="result-card" id="result">
+      <div class="result-icon">✅</div>
+      <h3>Watermark added!</h3>
+      <p>Your watermark has been stamped on every page.</p>
+      <p id="result-path" style="font-size:.82rem;color:var(--text-muted);font-family:monospace;word-break:break-all;"></p>
+      <a class="btn btn-download" id="dl-btn" href="#">⬇ Download Watermarked PDF</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

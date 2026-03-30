@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Protect PDF with Password{% endblock %}
+{% block meta_desc %}Password-protect your PDF file online for free. Secure your documents.{% endblock %}
+
+{% block content %}
+<div class="tool-page">
+  <a href="/" class="btn-back">← Back to all tools</a>
+  <div class="tool-header">
+    <div class="tool-icon-lg">🔒</div>
+    <div>
+      <h1>Protect PDF</h1>
+      <p>Add a password to your PDF so only authorised people can open it.</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <form class="tool-form" data-action="/api/protect" id="tool-form">
+      <div class="drop-zone">
+        <input type="file" name="file" accept=".pdf" required/>
+        <div class="dz-icon">📄</div>
+        <h3>Drop a PDF here</h3>
+        <p>or click to browse</p>
+        <div class="file-list"></div>
+      </div>
+      <br/>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" name="password" placeholder="Enter a strong password" required/>
+      </div>
+      <button class="btn btn-primary" type="submit" data-label="Protect PDF">Protect PDF</button>
+    </form>
+
+    <div class="spinner-wrap" id="spinner">
+      <div class="spinner"></div>
+      <p>Encrypting your PDF…</p>
+    </div>
+
+    <div id="error-msg" class="alert alert-error"></div>
+
+    <div class="result-card" id="result">
+      <div class="result-icon">✅</div>
+      <h3>PDF protected!</h3>
+      <p>Your PDF is now password-protected. Keep your password safe!</p>
+      <p id="result-path" style="font-size:.82rem;color:var(--text-muted);font-family:monospace;word-break:break-all;"></p>
+      <a class="btn btn-download" id="dl-btn" href="#">⬇ Download Protected PDF</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

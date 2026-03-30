@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="description" content="{% block meta_desc %}Free online PDF tools — merge, split, compress, rotate, watermark, and more.{% endblock %}"/>
+  <title>{% block title %}PDF Tools{% endblock %} | FreeOnlinePDFConvertor</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+</head>
+<body>
+
+<nav class="navbar">
+  <a href="/" class="navbar-brand">
+    <div class="logo-icon">📄</div>
+    FreeOnline<span>PDF</span>Converter
+  </a>
+  <div class="navbar-links">
+    <a href="/">Home</a>
+    <a href="/tools">All Tools</a>
+    <a href="/merge">Merge</a>
+    <a href="/compress">Compress</a>
+  </div>
+</nav>
+
+{% block content %}{% endblock %}
+
+<footer>
+  <p>Built with ❤️ by <span>FreeOnlinePDFConvertor</span> — Free PDF Tools Online</p>
+</footer>
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

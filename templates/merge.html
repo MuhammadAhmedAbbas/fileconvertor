@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Merge PDF{% endblock %}
+{% block meta_desc %}Merge multiple PDF files into one document online for free.{% endblock %}
+
+{% block content %}
+<div class="tool-page">
+  <a href="/" class="btn-back">← Back to all tools</a>
+  <div class="tool-header">
+    <div class="tool-icon-lg">🔗</div>
+    <div>
+      <h1>Merge PDF</h1>
+      <p>Combine two or more PDF files into a single document.</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <form class="tool-form" data-action="/api/merge" id="tool-form">
+      <div class="drop-zone">
+        <input type="file" name="files" accept=".pdf" multiple required/>
+        <div class="dz-icon">📄</div>
+        <h3>Drop PDF files here</h3>
+        <p>or click to browse — select 2 or more PDFs</p>
+        <div class="file-list"></div>
+      </div>
+      <br/>
+      <button class="btn btn-primary" type="submit" data-label="Merge PDFs">Merge PDFs</button>
+    </form>
+
+    <div class="spinner-wrap" id="spinner">
+      <div class="spinner"></div>
+      <p>Merging your PDFs…</p>
+    </div>
+
+    <div id="error-msg" class="alert alert-error"></div>
+
+    <div class="result-card" id="result">
+      <div class="result-icon">✅</div>
+      <h3>Merge complete!</h3>
+      <p>Your PDFs have been combined into one file.</p>
+      <p id="result-path" style="font-size:.82rem;color:var(--text-muted);font-family:monospace;word-break:break-all;"></p>
+      <a class="btn btn-download" id="dl-btn" href="#">⬇ Download Merged PDF</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+

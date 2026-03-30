@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Word to PDF{% endblock %}
+{% block meta_desc %}Convert a Word (.docx) document to PDF online for free.{% endblock %}
+
+{% block content %}
+<div class="tool-page">
+  <a href="/" class="btn-back">← Back to all tools</a>
+  <div class="tool-header">
+    <div class="tool-icon-lg">📃</div>
+    <div>
+      <h1>Word to PDF</h1>
+      <p>Convert your .docx Word document into a professional PDF file.</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <form class="tool-form" data-action="/api/word-to-pdf" id="tool-form">
+      <div class="drop-zone">
+        <input type="file" name="file" accept=".docx" required/>
+        <div class="dz-icon">📄</div>
+        <h3>Drop a .docx file here</h3>
+        <p>or click to browse — Word (.docx) files only</p>
+        <div class="file-list"></div>
+      </div>
+      <br/>
+      <button class="btn btn-primary" type="submit" data-label="Convert to PDF">Convert to PDF</button>
+    </form>
+
+    <div class="spinner-wrap" id="spinner">
+      <div class="spinner"></div>
+      <p>Converting Word to PDF…</p>
+    </div>
+
+    <div id="error-msg" class="alert alert-error"></div>
+
+    <div class="result-card" id="result">
+      <div class="result-icon">✅</div>
+      <h3>Conversion complete!</h3>
+      <p>Your Word document has been converted to PDF.</p>
+      <p id="result-path" style="font-size:.82rem;color:var(--text-muted);font-family:monospace;word-break:break-all;"></p>
+      <a class="btn btn-download" id="dl-btn" href="#">⬇ Download PDF</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
