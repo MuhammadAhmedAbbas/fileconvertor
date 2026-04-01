@@ -13,6 +13,8 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.colors import Color
 from PIL import Image
 from docx import Document as DocxDocument
+import pythoncom
+import win32com.client
 
 app = Flask(__name__)
 
@@ -481,17 +483,58 @@ def api_pdf_to_word():
     f = request.files.get("file")
     if not f or not allowed(f.filename, ALLOWED_PDF):
         return err("Please upload a valid PDF file.")
+    
     p = save_upload(f)
     out = out_path(".docx")
+    word = None
+    
     try:
-        from pdf2docx import Converter
-        cv = Converter(str(p))
-        cv.convert(str(out))
-        cv.close()
-        return ok(out, "converted.docx")
+        # 1. Attempt High Quality conversion via Microsoft Word COM (Best for layout)
+        try:
+            print(f"[*] Starting high-quality PDF to Word conversion for {f.filename}...")
+            pythoncom.CoInitialize()
+            word = win32com.client.DispatchEx("Word.Application")
+            word.Visible = False
+            
+            # Word can open PDF files directly and convert them
+            abs_p = str(p.absolute())
+            abs_out = str(out.absolute())
+            
+            # Open PDF
+            doc = word.Documents.Open(abs_p)
+            
+            # Save as DOCX (Format 16)
+            doc.SaveAs(abs_out, FileFormat=16) 
+            doc.Close()
+            print("[+] Word PDF-to-Word conversion successful.")
+            
+            return ok(out, "converted.docx")
+            
+        except Exception as com_err:
+            print(f"[!] Word COM PDF-to-Word failed: {com_err}")
+            # Fallback to pdf2docx
+            
+            # 2. Fallback to pdf2docx for environments without Word or if Word fails
+            print("[*] Falling back to pdf2docx for conversion...")
+            from pdf2docx import Converter
+            cv = Converter(str(p))
+            cv.convert(str(out))
+            cv.close()
+            return ok(out, "converted.docx")
+            
     except Exception as e:
+        print(f"[!!] PDF-to-Word conversion failure: {e}")
         return err(str(e), 500)
     finally:
+        # Cleanup Word
+        if word:
+            try:
+                word.Quit()
+            except:
+                pass
+        pythoncom.CoUninitialize()
+        
+        # Cleanup upload
         p.unlink(missing_ok=True)
 
 
@@ -506,31 +549,104 @@ def api_word_to_pdf():
     f = request.files.get("file")
     if not f or not allowed(f.filename, ALLOWED_WORD):
         return err("Please upload a valid Word (.docx) file.")
+    
     p = save_upload(f)
     out = out_path(".pdf")
+    word = None
+    
     try:
+        # 1. Attempt High Quality conversion via Microsoft Word COM
         try:
-            import docx2pdf
-            docx2pdf.convert(str(p), str(out))
-        except Exception:
-            # Fallback: plain text extraction → PDF via reportlab
+            print(f"[*] Starting high-quality conversion for {f.filename}...")
+            pythoncom.CoInitialize()
+            word = win32com.client.DispatchEx("Word.Application")
+            word.Visible = False
+            
+            # Open document
+            abs_p = str(p.absolute())
+            abs_out = str(out.absolute())
+            doc = word.Documents.Open(abs_p)
+            
+            # Save as PDF (Format 17)
+            doc.SaveAs(abs_out, FileFormat=17)
+            doc.Close()
+            print("[+] Word conversion successful.")
+            
+            return ok(out, "converted.pdf")
+            
+        except Exception as com_err:
+            print(f"[!] Word COM failed: {com_err}")
+            # Fallback to manual extraction
+            
+            # 2. Improved Fallback: Better formatting and error handling
+            print("[*] Falling back to simplified conversion...")
             doc = DocxDocument(str(p))
             buf_pdf = canvas.Canvas(str(out), pagesize=letter)
-            buf_pdf.setFont("Helvetica", 12)
+            
+            # Define fonts
+            title_font = "Helvetica-Bold"
+            body_font  = "Helvetica"
+            
             y = 750
+            margin = 50
+            line_height = 16
+            
             for para in doc.paragraphs:
-                if para.text.strip():
-                    buf_pdf.drawString(40, y, para.text.strip()[:110])
-                    y -= 18
-                    if y < 50:
-                        buf_pdf.showPage()
-                        buf_pdf.setFont("Helvetica", 12)
-                        y = 750
+                text = para.text.strip()
+                if not text:
+                    y -= 8 # spacer
+                    continue
+                
+                # Check for headings (primitive level detection)
+                if para.style.name.startswith("Heading"):
+                    buf_pdf.setFont(title_font, 14)
+                else:
+                    buf_pdf.setFont(body_font, 11)
+                
+                # Simple line wrapping logic
+                words = text.split()
+                line = ""
+                for w_word in words:
+                    test_line = f"{line} {w_word}".strip()
+                    if buf_pdf.stringWidth(test_line, body_font, 11) < (letter[0] - 2 * margin):
+                        line = test_line
+                    else:
+                        buf_pdf.drawString(margin, y, line)
+                        y -= line_height
+                        line = w_word
+                        if y < 50:
+                            buf_pdf.showPage()
+                            y = 750
+                            # Re-set font for new page
+                            if para.style.name.startswith("Heading"):
+                                buf_pdf.setFont(title_font, 14)
+                            else:
+                                buf_pdf.setFont(body_font, 11)
+
+                if line:
+                    buf_pdf.drawString(margin, y, line)
+                    y -= line_height
+                
+                if y < 50:
+                    buf_pdf.showPage()
+                    y = 750
+            
             buf_pdf.save()
-        return ok(out, "converted.pdf")
+            return ok(out, "converted_simplified.pdf")
+            
     except Exception as e:
+        print(f"[!!] Total conversion failure: {e}")
         return err(str(e), 500)
     finally:
+        # Cleanup Word
+        if word:
+            try:
+                word.Quit()
+            except:
+                pass
+        pythoncom.CoUninitialize()
+        
+        # Cleanup upload
         p.unlink(missing_ok=True)
 
 
