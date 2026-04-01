@@ -15,6 +15,7 @@ from PIL import Image
 from docx import Document as DocxDocument
 import pythoncom
 import win32com.client
+import fitz  # PyMuPDF
 
 app = Flask(__name__)
 
@@ -28,7 +29,6 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024   # 50 MB
 
 ALLOWED_PDF  = {"pdf"}
-ALLOWED_IMG  = {"jpg", "jpeg", "png"}
 ALLOWED_WORD = {"docx"}
 
 
@@ -106,13 +106,11 @@ def protect_page():
 def unlock_page():
     return render_template("unlock.html")
 
-@app.route("/pdf-to-jpg")
-def pdf_to_jpg_page():
-    return render_template("pdf_to_jpg.html")
+@app.route("/sign")
+def sign_page():
+    return render_template("sign.html")
 
-@app.route("/jpg-to-pdf")
-def jpg_to_pdf_page():
-    return render_template("jpg_to_pdf.html")
+
 
 @app.route("/pdf-to-word")
 def pdf_to_word_page():
@@ -413,67 +411,6 @@ def api_unlock():
         p.unlink(missing_ok=True)
 
 
-# ── API: PDF to JPG ────────────────────────────────────────────────────────
-
-@app.route("/api/pdf-to-jpg", methods=["POST"])
-def api_pdf_to_jpg():
-    f = request.files.get("file")
-    if not f or not allowed(f.filename, ALLOWED_PDF):
-        return err("Please upload a valid PDF file.")
-    dpi = int(request.form.get("dpi", 150))
-    dpi = max(72, min(dpi, 300))
-    p = save_upload(f)
-    zip_out = out_path(".zip")
-    tmp_images = []
-    try:
-        try:
-            from pdf2image import convert_from_path
-        except ImportError:
-            return err("pdf2image library not installed. Install it and Poppler.", 500)
-
-        images = convert_from_path(str(p), dpi=dpi)
-        with zipfile.ZipFile(zip_out, "w") as zf:
-            for j, img in enumerate(images, start=1):
-                img_path = out_path(f"_page{j}.jpg")
-                img.save(str(img_path), "JPEG", quality=85)
-                tmp_images.append(img_path)
-                zf.write(img_path, img_path.name)
-        return ok(zip_out, "pdf_images.zip")
-    except Exception as e:
-        return err(str(e), 500)
-    finally:
-        p.unlink(missing_ok=True)
-        for ip in tmp_images:
-            ip.unlink(missing_ok=True)
-
-
-# ── API: JPG to PDF ────────────────────────────────────────────────────────
-
-@app.route("/api/jpg-to-pdf", methods=["POST"])
-def api_jpg_to_pdf():
-    files = request.files.getlist("files")
-    if not files:
-        return err("Please upload at least one image.")
-    for f in files:
-        if not allowed(f.filename, ALLOWED_IMG):
-            return err(f"'{f.filename}' is not a valid image (JPG/PNG).")
-    saved = []
-    out = out_path(".pdf")
-    try:
-        images = []
-        for f in files:
-            p = save_upload(f)
-            saved.append(p)
-            img = Image.open(p).convert("RGB")
-            images.append(img)
-        if images:
-            images[0].save(str(out), save_all=True, append_images=images[1:])
-        return ok(out, "images.pdf")
-    except Exception as e:
-        return err(str(e), 500)
-    finally:
-        for p in saved:
-            p.unlink(missing_ok=True)
 
 
 # ── API: PDF to Word ───────────────────────────────────────────────────────
@@ -648,6 +585,63 @@ def api_word_to_pdf():
         
         # Cleanup upload
         p.unlink(missing_ok=True)
+
+
+# ── API: Sign PDF ──────────────────────────────────────────────────────────
+
+@app.route("/api/sign", methods=["POST"])
+def api_sign():
+    pdf_file = request.files.get("pdf")
+    sig_file = request.files.get("signature")
+    
+    if not pdf_file or not allowed(pdf_file.filename, ALLOWED_PDF):
+        return err("Please upload a valid PDF file.")
+    # Check if a signature file was uploaded. If not, maybe use a default or error
+    if not sig_file:
+         return err("Please upload a signature image.")
+         
+    page_num = int(request.form.get("page", 1)) - 1
+    position = request.form.get("position", "bottom-right")
+    
+    p_pdf = save_upload(pdf_file)
+    p_sig = save_upload(sig_file)
+    out = out_path(".pdf")
+    
+    try:
+        doc = fitz.open(str(p_pdf))
+        if page_num < 0 or page_num >= len(doc):
+            return err(f"Invalid page number. PDF has {len(doc)} pages.")
+            
+        page = doc[page_num]
+        w, h = page.rect.width, page.rect.height
+        
+        # Default signature size
+        sig_w, sig_h = 150, 75
+        margin = 50
+        
+        if position == "bottom-right":
+            pos_rect = fitz.Rect(w - sig_w - margin, h - sig_h - margin, w - margin, h - margin)
+        elif position == "bottom-left":
+            pos_rect = fitz.Rect(margin, h - sig_h - margin, margin + sig_w, h - margin)
+        elif position == "top-right":
+            pos_rect = fitz.Rect(w - sig_w - margin, margin, w - margin, margin + sig_h)
+        elif position == "top-left":
+            pos_rect = fitz.Rect(margin, margin, margin + sig_w, margin + sig_h)
+        else:
+            pos_rect = fitz.Rect(w/2 - sig_w/2, h/2 - sig_h/2, w/2 + sig_w/2, h/2 + sig_h/2)
+            
+        page.insert_image(pos_rect, filename=str(p_sig))
+        doc.save(str(out))
+        doc.close()
+        
+        return ok(out, "signed.pdf")
+    except Exception as e:
+        return err(str(e), 500)
+    finally:
+        p_pdf.unlink(missing_ok=True)
+        p_sig.unlink(missing_ok=True)
+
+
 
 
 # ── Run ────────────────────────────────────────────────────────────────────

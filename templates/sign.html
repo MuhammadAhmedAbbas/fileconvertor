@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Sign PDF{% endblock %}
+{% block meta_desc %}Add a signature to your PDF document online for free.{% endblock %}
+
+{% block content %}
+<section class="tool-page">
+  <div class="tool-header">
+    <h1>Sign <span>PDF</span></h1>
+    <p>Upload a PDF and a signature image to sign your document.</p>
+  </div>
+
+  <div class="tool-container">
+    <form id="signForm" class="upload-form">
+      <div class="form-group">
+        <label for="pdfFile">Step 1: Select PDF File</label>
+        <input type="file" id="pdfFile" name="pdf" accept=".pdf" required>
+      </div>
+
+      <div class="form-group">
+        <label for="sigFile">Step 2: Select Signature (PNG/JPG)</label>
+        <input type="file" id="sigFile" name="signature" accept="image/*" required>
+      </div>
+
+      <div class="form-group">
+        <label for="page">Step 3: Choose Page Number</label>
+        <input type="number" id="page" name="page" value="1" min="1" required>
+      </div>
+
+      <div class="form-group">
+        <label for="position">Step 4: Choose Position</label>
+        <select id="position" name="position">
+          <option value="bottom-right" selected>Bottom Right</option>
+          <option value="bottom-left">Bottom Left</option>
+          <option value="top-right">Top Right</option>
+          <option value="top-left">Top Left</option>
+          <option value="center">Center</option>
+        </select>
+      </div>
+
+      <button type="submit" class="btn btn-primary" id="submitBtn">Sign PDF →</button>
+    </form>
+
+    <div id="status" class="status-container hidden">
+      <div class="loader"></div>
+      <p id="statusMsg">Processing your PDF...</p>
+    </div>
+
+    <div id="result" class="result-container hidden">
+      <div class="success-icon">✓</div>
+      <h3>PDF Signed Successfully!</h3>
+      <p>Your document is ready for download.</p>
+      <a id="downloadBtn" href="#" class="btn btn-primary">Download Signed PDF</a>
+    </form>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('signForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const status = document.getElementById('status');
+  const result = document.getElementById('result');
+  const submitBtn = document.getElementById('submitBtn');
+  
+  const formData = new FormData(form);
+  
+  status.classList.remove('hidden');
+  result.classList.add('hidden');
+  submitBtn.disabled = true;
+
+  try {
+    const resp = await fetch('/api/sign', { method: 'POST', body: formData });
+    const data = await resp.json();
+    
+    if (data.success) {
+      document.getElementById('downloadBtn').href = data.download_url;
+      result.classList.remove('hidden');
+      status.classList.add('hidden');
+    } else {
+      alert("Error: " + data.error);
+      status.classList.add('hidden');
+    }
+  } catch (err) {
+    alert("An error occurred: " + err.message);
+    status.classList.add('hidden');
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+</script>
+{% endblock %}
