@@ -3,6 +3,7 @@ import uuid
 import zipfile
 import io
 import subprocess
+import platform
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, send_from_directory, url_for
 
@@ -16,14 +17,19 @@ from PIL import Image
 from docx import Document as DocxDocument
 import fitz  # PyMuPDF
 
-# Try to import Windows-specific COM libraries for high-quality conversion
-try:
-    import pythoncom
-    import win32com.client
-    WINDOWS_COM_AVAILABLE = True
-except ImportError:
-    WINDOWS_COM_AVAILABLE = False
-    print("[!] Windows COM components not available. Using fallback conversion methods.")
+# ── Windows COM (MS Word automation) — only attempted on Windows ───────────
+# On Linux/Railway, gunicorn workers can crash even with a bare try/except
+# because the import machinery still scans for the DLL. The platform check
+# prevents any attempt on non-Windows environments.
+WINDOWS_COM_AVAILABLE = False
+if platform.system() == "Windows":
+    try:
+        import pythoncom
+        import win32com.client
+        WINDOWS_COM_AVAILABLE = True
+    except ImportError:
+        WINDOWS_COM_AVAILABLE = False
+        print("[!] pywin32 not installed. Using fallback conversion methods.")
 
 app = Flask(__name__)
 
