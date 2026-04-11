@@ -46,7 +46,9 @@ RUN mkdir -p /app/uploads /app/outputs && chmod 777 /app/uploads /app/outputs
 EXPOSE 5000
 
 # Run the application
-# --workers 1   : avoids OOM on Railway free tier (512MB limit)
-# --preload     : imports the app ONCE in master; if it crashes, you see why
-# --timeout 120 : allow slow PDF operations to complete
-CMD gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --preload --timeout 120
+# exec form + sh -c guarantees $PORT shell-expansion regardless of how Railway invokes CMD
+# ${PORT:-5000} = use Railway-injected PORT, fall back to 5000 if not set
+# --workers 1  : avoids OOM on Railway free tier (512 MB RAM limit)
+# no --preload : some C-extensions (opencv, fitz, pikepdf) can deadlock when
+#               the master pre-imports them then forks — safer to skip it
+CMD ["sh", "-c", "gunicorn app:app --bind 0.0.0.0:${PORT:-5000} --workers 1 --timeout 120"]
