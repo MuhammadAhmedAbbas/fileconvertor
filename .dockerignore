@@ -1,0 +1,16 @@
+.git
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.db
+.DS_Store
+uploads/
+outputs/
+.env
+Dockerfile
+docker-compose.yml
+implementation_plan.md
+task.md
+walkthrough.md

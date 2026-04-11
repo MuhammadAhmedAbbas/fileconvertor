@@ -2,6 +2,7 @@ import os
 import uuid
 import zipfile
 import io
+import subprocess
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, send_from_directory, url_for
 
@@ -13,18 +14,26 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.colors import Color
 from PIL import Image
 from docx import Document as DocxDocument
-import pythoncom
-import win32com.client
 import fitz  # PyMuPDF
+
+# Try to import Windows-specific COM libraries for high-quality conversion
+try:
+    import pythoncom
+    import win32com.client
+    WINDOWS_COM_AVAILABLE = True
+except ImportError:
+    WINDOWS_COM_AVAILABLE = False
+    print("[!] Windows COM components not available. Using fallback conversion methods.")
 
 app = Flask(__name__)
 
 # ── Config ─────────────────────────────────────────────────────────────────
 BASE_DIR   = Path(__file__).parent
-UPLOAD_DIR = BASE_DIR / "uploads"
-OUTPUT_DIR = Path.home() / "Downloads"   # Save directly to user's Downloads folder
-UPLOAD_DIR.mkdir(exist_ok=True)
-OUTPUT_DIR.mkdir(exist_ok=True)
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", BASE_DIR / "uploads"))
+OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", BASE_DIR / "outputs"))
+
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024   # 50 MB
 
@@ -62,6 +71,52 @@ def ok(path: Path, dl_name: str):
         "file_path": str(path),
         "file_name": dl_name
     })
+
+def convert_word_to_pdf_libreoffice(input_path: Path, output_path: Path):
+    """
+    Converts a Word document to PDF using LibreOffice in headless mode.
+    This is the best cross-platform conversion method for Linux/Docker.
+    """
+    try:
+        # Provide a writable user configuration directory, crucial for Docker running as root
+        # We use a unique directory in /tmp for this conversion to avoid clashes
+        profile_dir = f"file:///tmp/libreoffice_profile_{uuid.uuid4().hex}"
+        
+        # LibreOffice command: libreoffice --headless --convert-to pdf --outdir <dir> <file>
+        result = subprocess.run([
+            'libreoffice',
+            f'-env:UserInstallation={profile_dir}',
+            '--headless',
+            '--invisible',
+            '--nologo',
+            '--nodefault',
+            '--nofirststartwizard',
+            '--convert-to', 'pdf',
+            '--outdir', str(output_path.parent),
+            str(input_path)
+        ], capture_output=True, text=True, check=True)
+        
+        # LibreOffice creates a file with the same name but .pdf extension in the outdir
+        generated_pdf = output_path.parent / f"{input_path.stem}.pdf"
+        if generated_pdf.exists():
+            # Rename it to our desired output path if they differ
+            if generated_pdf != output_path:
+                if output_path.exists():
+                    output_path.unlink()
+                generated_pdf.replace(output_path)
+            return True
+        else:
+            print(f"[!] LibreOffice finished but no PDF was found at {generated_pdf}")
+            return False
+            
+    except subprocess.CalledProcessError as e:
+        print(f"[!] LibreOffice conversion failed with code {e.returncode}")
+        print(f"[!] STDOUT: {e.stdout}")
+        print(f"[!] STDERR: {e.stderr}")
+        return False
+    except Exception as e:
+        print(f"[!] LibreOffice conversion failed: {e}")
+        return False
 
 
 # ── Routes: pages ──────────────────────────────────────────────────────────
@@ -427,50 +482,55 @@ def api_pdf_to_word():
     
     try:
         # 1. Attempt High Quality conversion via Microsoft Word COM (Best for layout)
-        try:
-            print(f"[*] Starting high-quality PDF to Word conversion for {f.filename}...")
-            pythoncom.CoInitialize()
-            word = win32com.client.DispatchEx("Word.Application")
-            word.Visible = False
-            
-            # Word can open PDF files directly and convert them
-            abs_p = str(p.absolute())
-            abs_out = str(out.absolute())
-            
-            # Open PDF
-            doc = word.Documents.Open(abs_p)
-            
-            # Save as DOCX (Format 16)
-            doc.SaveAs(abs_out, FileFormat=16) 
-            doc.Close()
-            print("[+] Word PDF-to-Word conversion successful.")
-            
-            return ok(out, "converted.docx")
-            
-        except Exception as com_err:
-            print(f"[!] Word COM PDF-to-Word failed: {com_err}")
-            # Fallback to pdf2docx
-            
-            # 2. Fallback to pdf2docx for environments without Word or if Word fails
-            print("[*] Falling back to pdf2docx for conversion...")
-            from pdf2docx import Converter
-            cv = Converter(str(p))
-            cv.convert(str(out))
-            cv.close()
-            return ok(out, "converted.docx")
+        if WINDOWS_COM_AVAILABLE:
+            try:
+                print(f"[*] Starting high-quality PDF to Word conversion for {f.filename}...")
+                pythoncom.CoInitialize()
+                word = win32com.client.DispatchEx("Word.Application")
+                word.Visible = False
+                
+                # Word can open PDF files directly and convert them
+                abs_p = str(p.absolute())
+                abs_out = str(out.absolute())
+                
+                # Open PDF
+                doc = word.Documents.Open(abs_p)
+                
+                # Save as DOCX (Format 16)
+                doc.SaveAs(abs_out, FileFormat=16) 
+                doc.Close()
+                print("[+] Word PDF-to-Word conversion successful.")
+                
+                return ok(out, "converted.docx")
+                
+            except Exception as com_err:
+                print(f"[!] Word COM PDF-to-Word failed: {com_err}")
+                # Fallback to pdf2docx
+        
+        # 2. Fallback to pdf2docx for environments without Word or if Word fails
+        print("[*] Falling back to pdf2docx for conversion...")
+        from pdf2docx import Converter
+        cv = Converter(str(p))
+        cv.convert(str(out))
+        cv.close()
+        return ok(out, "converted.docx")
             
     except Exception as e:
         print(f"[!!] PDF-to-Word conversion failure: {e}")
         return err(str(e), 500)
     finally:
-        # Cleanup Word
-        if word:
+        # Cleanup Word (Windows only)
+        if WINDOWS_COM_AVAILABLE and word:
             try:
                 word.Quit()
             except:
                 pass
-        pythoncom.CoUninitialize()
-        
+        if WINDOWS_COM_AVAILABLE:
+            try:
+                pythoncom.CoUninitialize()
+            except Exception:
+                pass
+
         # Cleanup upload
         p.unlink(missing_ok=True)
 
@@ -493,96 +553,56 @@ def api_word_to_pdf():
     
     try:
         # 1. Attempt High Quality conversion via Microsoft Word COM
-        try:
-            print(f"[*] Starting high-quality conversion for {f.filename}...")
-            pythoncom.CoInitialize()
-            word = win32com.client.DispatchEx("Word.Application")
-            word.Visible = False
-            
-            # Open document
-            abs_p = str(p.absolute())
-            abs_out = str(out.absolute())
-            doc = word.Documents.Open(abs_p)
-            
-            # Save as PDF (Format 17)
-            doc.SaveAs(abs_out, FileFormat=17)
-            doc.Close()
-            print("[+] Word conversion successful.")
-            
-            return ok(out, "converted.pdf")
-            
-        except Exception as com_err:
-            print(f"[!] Word COM failed: {com_err}")
-            # Fallback to manual extraction
-            
-            # 2. Improved Fallback: Better formatting and error handling
-            print("[*] Falling back to simplified conversion...")
-            doc = DocxDocument(str(p))
-            buf_pdf = canvas.Canvas(str(out), pagesize=letter)
-            
-            # Define fonts
-            title_font = "Helvetica-Bold"
-            body_font  = "Helvetica"
-            
-            y = 750
-            margin = 50
-            line_height = 16
-            
-            for para in doc.paragraphs:
-                text = para.text.strip()
-                if not text:
-                    y -= 8 # spacer
-                    continue
+        if WINDOWS_COM_AVAILABLE:
+            try:
+                print(f"[*] Starting high-quality conversion for {f.filename}...")
+                pythoncom.CoInitialize()
+                word = win32com.client.DispatchEx("Word.Application")
+                word.Visible = False
                 
-                # Check for headings (primitive level detection)
-                if para.style.name.startswith("Heading"):
-                    buf_pdf.setFont(title_font, 14)
-                else:
-                    buf_pdf.setFont(body_font, 11)
+                # Open document
+                abs_p = str(p.absolute())
+                abs_out = str(out.absolute())
+                doc = word.Documents.Open(abs_p)
                 
-                # Simple line wrapping logic
-                words = text.split()
-                line = ""
-                for w_word in words:
-                    test_line = f"{line} {w_word}".strip()
-                    if buf_pdf.stringWidth(test_line, body_font, 11) < (letter[0] - 2 * margin):
-                        line = test_line
-                    else:
-                        buf_pdf.drawString(margin, y, line)
-                        y -= line_height
-                        line = w_word
-                        if y < 50:
-                            buf_pdf.showPage()
-                            y = 750
-                            # Re-set font for new page
-                            if para.style.name.startswith("Heading"):
-                                buf_pdf.setFont(title_font, 14)
-                            else:
-                                buf_pdf.setFont(body_font, 11)
+                # Save as PDF (Format 17)
+                doc.SaveAs(abs_out, FileFormat=17)
+                doc.Close()
+                print("[+] Word conversion successful.")
+                
+                return ok(out, "converted.pdf")
+                
+            except Exception as com_err:
+                print(f"[!] Word COM failed: {com_err}")
+                # Fallback to manual extraction
+        
+        # 2. Attempt LibreOffice conversion (Best for Linux/Docker)
+        if not WINDOWS_COM_AVAILABLE:
+            print("[*] Attempting LibreOffice conversion...")
+            if convert_word_to_pdf_libreoffice(p, out):
+                print("[+] LibreOffice conversion successful.")
+                return ok(out, "converted.pdf")
+            else:
+                print("[!] LibreOffice conversion failed.")
+                return err("Server error: High-fidelity PDF conversion failed.", 500)
 
-                if line:
-                    buf_pdf.drawString(margin, y, line)
-                    y -= line_height
-                
-                if y < 50:
-                    buf_pdf.showPage()
-                    y = 750
-            
-            buf_pdf.save()
-            return ok(out, "converted_simplified.pdf")
             
     except Exception as e:
         print(f"[!!] Total conversion failure: {e}")
         return err(str(e), 500)
     finally:
-        # Cleanup Word
-        if word:
+        # Cleanup Word (Windows only)
+        if WINDOWS_COM_AVAILABLE and word:
             try:
                 word.Quit()
             except:
                 pass
-        pythoncom.CoUninitialize()
-        
+        if WINDOWS_COM_AVAILABLE:
+            try:
+                pythoncom.CoUninitialize()
+            except Exception:
+                pass
+
         # Cleanup upload
         p.unlink(missing_ok=True)
 
