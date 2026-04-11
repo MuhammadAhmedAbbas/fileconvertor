@@ -127,6 +127,11 @@ def convert_word_to_pdf_libreoffice(input_path: Path, output_path: Path):
 
 # ── Routes: pages ──────────────────────────────────────────────────────────
 
+@app.route("/healthz")
+def healthz():
+    """Lightweight healthcheck endpoint used by Railway."""
+    return "OK", 200
+
 @app.route("/")
 def landing():
     return render_template("landing.html")
@@ -673,4 +678,5 @@ def api_sign():
 # ── Run ────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
